@@ -1,0 +1,61 @@
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+
+export async function createStudent(formData: FormData) {
+  const fullName = String(formData.get('full_name') ?? '').trim()
+  const email = String(formData.get('email') ?? '').trim().toLowerCase()
+  const phone = String(formData.get('phone') ?? '').trim()
+
+  if (!fullName || !email) {
+    return { error: 'Nombre y email son obligatorios.' }
+  }
+
+  // Confirmar que quien ejecuta esta acción es admin (defensa extra además de RLS)
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'No autenticado.' }
+  }
+
+  const { data: callerProfile } = await supabase
+    .from('profiles')
+    .select('roles')
+    .eq('id', user.id)
+    .single()
+
+  if (!callerProfile?.roles?.includes('admin')) {
+    return { error: 'No tenés permisos para esta acción.' }
+  }
+
+  // Armar la URL de este mismo sitio (funciona tanto en localhost como en Vercel)
+  const headersList = await headers()
+  const host = headersList.get('host')
+  const protocol = host?.startsWith('localhost') ? 'http' : 'https'
+  const siteUrl = `${protocol}://${host}`
+
+  const admin = createAdminClient()
+
+  const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
+    data: { full_name: fullName },
+    redirectTo: `${siteUrl}/auth/confirm?next=/auth/set-password`,
+  })
+
+  if (inviteError) {
+    return { error: inviteError.message }
+  }
+
+  const newUserId = invited.user?.id
+  if (newUserId && phone) {
+    await admin.from('profiles').update({ phone }).eq('id', newUserId)
+  }
+
+  revalidatePath('/admin/alumnos')
+  return { success: true }
+}

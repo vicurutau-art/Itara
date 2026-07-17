@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { LogoutButton } from '@/lib/supabase/logout-button'
@@ -33,6 +34,14 @@ export default async function AdminLayout({
         </div>
         <LogoutButton />
       </header>
+      <nav className="flex gap-4 border-b border-gray-200 bg-white px-6 py-2 text-sm">
+        <Link href="/admin" className="text-gray-600 hover:text-gray-900">
+          Inicio
+        </Link>
+        <Link href="/admin/alumnos" className="text-gray-600 hover:text-gray-900">
+          Alumnos
+        </Link>
+      </nav>
       <main className="p-6">{children}</main>
     </div>
   )
